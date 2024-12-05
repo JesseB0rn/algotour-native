@@ -3,7 +3,10 @@
 #include <thread>
 #include <gdal.h>
 #include <gdal_priv.h>
+#include <uuid/uuid.h>
 #include "GeoTiffLoader.h"
+#include "Postprocessor.h"
+#include "QueueItem.h"
 
 using namespace std;
 
@@ -15,31 +18,9 @@ static void Exit(int code)
   exit(code);
 }
 
-typedef struct
-{
-  int x_riskmap;
-  int y_riskmap;
-  int x_dem;
-  int y_dem;
-  float totalCost;
-} WalkQueueItem;
-
-typedef struct
-{
-  int x;
-  int y;
-} WalkItem;
-
-struct cmp_walkcost
-{
-  bool operator()(WalkQueueItem left, WalkQueueItem right)
-  {
-    return left.totalCost > right.totalCost;
-  }
-};
-
 float walk_time_cost(float demValueA, float demValueB, float distance)
 {
+
   const float cd = 0.25;
   const float ce = 2.5;
 
@@ -61,8 +42,22 @@ std::vector<WalkItem> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &de
   WalkItem end = {0, 0};
   riskmap.convertLatLonToPixel(endLat, endLon, end.x, end.y);
 
-  // TODO: Check if start and end are within the bounds of the raster
-  // TODO: Check if start and end are not NODATA_VALUE
+  if (riskmap.GetValueFromDatasetBuffer(startLat, startLon) == NODATA_VALUE || dem.GetValueFromDatasetBuffer(startLat, startLon) == NODATA_VALUE)
+  {
+    cout << "Start is NODATA_VALUE" << endl;
+    return std::vector<WalkItem>();
+  }
+  if (riskmap.GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE || dem.GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE)
+  {
+    cout << "End is NODATA_VALUE" << endl;
+    return std::vector<WalkItem>();
+  }
+
+  if ((startLat - endLat) * (startLat - endLat) + (startLon - endLon) * (startLon - endLon) >= 20000 * 20000)
+  {
+    cout << "Start and end are too far apart" << endl;
+    return std::vector<WalkItem>();
+  };
 
   auto cmp = [](WalkQueueItem left, WalkQueueItem right)
   { return left.totalCost > right.totalCost; };
@@ -73,20 +68,26 @@ std::vector<WalkItem> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &de
   dem.convertLatLonToPixel(startLat, startLon, start.x_dem, start.y_dem);
   q.push(start);
 
+  float maxHeuristic = max(abs(end.x - start.x_riskmap), abs(end.y - start.y_riskmap));
+
   auto cameFrom = std::unordered_map<int, WalkItem>();
 
   bool *visited = (bool *)CPLMalloc(sizeof(bool) * nXSize * nYSize);
+  std::fill(visited, visited + nXSize * nYSize, false);
+
+  float *accumulatedCost = (float *)CPLMalloc(sizeof(float) * nXSize * nYSize);
+  std::fill(accumulatedCost, accumulatedCost + nXSize * nYSize, INFINITY);
 
   while (!q.empty())
   {
     WalkQueueItem current = q.top();
     q.pop();
 
-    if (visited[current.x_riskmap + current.y_riskmap * nXSize])
+    if (accumulatedCost[current.x_riskmap + current.y_riskmap * nXSize] < current.totalCost)
     {
       continue;
     }
-    visited[current.x_riskmap + current.y_riskmap * nXSize] = true;
+    accumulatedCost[current.x_riskmap + current.y_riskmap * nXSize] = current.totalCost;
 
     float *riskmapValue = riskmap.GetVRefFromDatasetBuffer(current.x_riskmap, current.y_riskmap);
     float *demValue = dem.GetVRefFromDatasetBuffer(current.x_dem, current.y_dem);
@@ -96,11 +97,13 @@ std::vector<WalkItem> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &de
     if (current.x_riskmap == end.x && current.y_riskmap == end.y)
     {
       auto path = std::vector<WalkItem>();
-      WalkItem current = {end.x, end.y};
-      while (current.x != start.x_riskmap || current.y != start.y_riskmap)
+      cout << "Path found" << endl;
+      WalkItem curr = {end.x, end.y};
+
+      while ((curr.x != start.x_riskmap || curr.y != start.y_riskmap))
       {
-        path.push_back(current);
-        current = cameFrom[current.x + current.y * nXSize];
+        path.push_back(curr);
+        curr = cameFrom[curr.x + curr.y * nXSize];
       }
       return path;
     }
@@ -129,9 +132,23 @@ std::vector<WalkItem> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &de
           continue;
         }
 
-        float heuristic = sqrt((end.x - next.x_riskmap) * (end.x - next.x_riskmap) + (end.y - next.y_riskmap) * (end.y - next.y_riskmap));
-        next.totalCost += 50.0 * (*nextRiskmapValue) + walk_time_cost(*demValue, *nextDemValue, sqrt(i * i + j * j) * 10.0) + heuristic * 0.1;
+        float heuristic = max(abs(end.x - next.x_riskmap), abs(end.y - next.y_riskmap));
+        if (heuristic > 2 * maxHeuristic)
+        {
+          continue;
+        }
+        /**
+         * Heuristic calculation:
+         * -  cost for riskmap:         0     | 50.0
+         * -  cost for flat wt:
+         *
+         */
+        next.totalCost += 50.0 * (*nextRiskmapValue) + walk_time_cost(*demValue, *nextDemValue, sqrt(i * i + j * j) * 10.0) + heuristic;
 
+        if (accumulatedCost[next.x_riskmap + next.y_riskmap * nXSize] < next.totalCost)
+        {
+          continue;
+        }
         cameFrom[next.x_riskmap + next.y_riskmap * riskmap.GetNXSize()] = {current.x_riskmap, current.y_riskmap};
         q.push(next);
       }
@@ -139,6 +156,7 @@ std::vector<WalkItem> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &de
   }
 
   cout << "Path found" << endl;
+  return std::vector<WalkItem>();
 }
 
 int main(int argc, char *argv[])
@@ -159,15 +177,21 @@ int main(int argc, char *argv[])
 
   cout << "Rasters read successfully, ready" << endl;
 
-  float a = riskmap_loader->GetValueFromDatasetBuffer(2662390.000000, 1239740.000000);
-  float b = dem_loader->GetValueFromDatasetBuffer(2662390.000000, 1239740.000000);
+  // float a = riskmap_loader->GetValueFromDatasetBuffer(2662390.000000, 1239740.000000);
+  // float b = dem_loader->GetValueFromDatasetBuffer(2662390.000000, 1239740.000000);
 
-  cout << "Value at 2662390.000000, 1239740.000000: " << a << "@ " << b << "müM" << endl;
+  // cout << "Value at 2662390.000000, 1239740.000000: " << a << "@ " << b << "müM" << endl;
 
-  for (int i = 0; i < 10; i++)
-  {
-    runWalkOnRasters(*riskmap_loader, *dem_loader, riskmap_loader->GetNXSize(), riskmap_loader->GetNYSize());
-  }
+  auto pth = runWalkOnRasters(*riskmap_loader, *dem_loader, riskmap_loader->GetNXSize(), riskmap_loader->GetNYSize());
+  // for (auto &item : pth)
+  // {
+  //   double lat, lon;
+  //   riskmap_loader->convertPixelToLatLon(item.x, item.y, lat, lon);
+  //   cout << "Path item: " << lat << ", " << lon << endl;
+  // }
+  Postprocessor *po = new Postprocessor(pth);
+  po->simplify();
+  po->writeReprojectedGeoJSON("/Users/jesseb0rn/Documents/repos/algotour-native/out.json", riskmap_loader);
 
   riskmap_loader->~GeoTiffLoader();
   dem_loader->~GeoTiffLoader();
