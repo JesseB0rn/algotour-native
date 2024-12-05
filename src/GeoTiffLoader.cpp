@@ -87,3 +87,48 @@ float *GeoTiffLoader::GetVRefFromDatasetBuffer(double lat, double lon)
 
   return &buffer[pixelY * nXSize + pixelX];
 }
+
+/**
+ * @brief Get the pointer to value at the given pixel coordinates from the dataset buffer
+ *
+ * @param x pixel x coordinate
+ * @param  y pixel y coordinate
+ * @return float*
+ */
+float *GeoTiffLoader::GetVRefFromDatasetBuffer(int x, int y)
+{
+  if (x < 0 || x >= nXSize || y < 0 || y >= nYSize)
+  {
+    return nullptr;
+  }
+
+  return &buffer[y * nXSize + x];
+}
+
+/**
+ * @brief Convert the given lat and lon to pixel coordinates
+ *
+ * @param lat LV03+ latitude
+ * @param lon LV03+ longitude
+ * @param x pixel x coordinate
+ * @param y pixel y coordinate
+ */
+void GeoTiffLoader::convertLatLonToPixel(double lat, double lon, int &x, int &y)
+{
+  y = (lat - fwdTransform[0]) / fwdTransform[1];
+  x = (lon - fwdTransform[3]) / fwdTransform[5];
+}
+
+/**
+ * @brief Convert the given pixel coordinates to lat and lon
+ *
+ * @param x pixel x coordinate
+ * @param y pixel y coordinate
+ * @param lat LV03+ latitude
+ * @param lon LV03+ longitude
+ */
+void GeoTiffLoader::convertPixelToLatLon(int x, int y, double &lat, double &lon)
+{
+  lat = fwdTransform[0] + y * fwdTransform[1];
+  lon = fwdTransform[3] + x * fwdTransform[5];
+}

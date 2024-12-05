@@ -15,6 +15,12 @@ public:
 
     float GetValueFromDatasetBuffer(double lat, double lon);
     float* GetVRefFromDatasetBuffer(double lat, double lon);
+    float* GetVRefFromDatasetBuffer(int x, int y);
+    void convertLatLonToPixel(double lat, double lon, int &x, int &y);
+    void convertPixelToLatLon(int x, int y, double &lat, double &lon);
+
+    int GetNXSize() { return nXSize; }
+    int GetNYSize() { return nYSize; }
 
 private:
     GDALDataset *dataset;
