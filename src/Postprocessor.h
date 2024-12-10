@@ -7,12 +7,12 @@
 
 class Postprocessor {
 public:
-  Postprocessor(const std::vector<WalkItem>& items);
+  Postprocessor(const std::vector<Node>& items);
   void writeReprojectedGeoJSON(const char *filename, GeoTiffLoader *riskmap);
   void simplify();
 
 private:
-  std::vector<WalkItem> items;
+  std::vector<Node> items;
 };
 
 #endif // POSTPROCESSOR_H

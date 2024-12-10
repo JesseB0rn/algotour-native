@@ -8,14 +8,15 @@
 #include <gdal.h>
 #include <gdal_priv.h>
 
-class GeoTiffLoader {
+class GeoTiffLoader
+{
 public:
     GeoTiffLoader(const char *filePath);
     ~GeoTiffLoader();
 
     float GetValueFromDatasetBuffer(double lat, double lon);
-    float* GetVRefFromDatasetBuffer(double lat, double lon);
-    float* GetVRefFromDatasetBuffer(int x, int y);
+    float *GetVRefFromDatasetBuffer(double lat, double lon);
+    float *GetVRefFromDatasetBuffer(int x, int y);
     void convertLatLonToPixel(double lat, double lon, int &x, int &y);
     void convertPixelToLatLon(int x, int y, double &lat, double &lon);
 

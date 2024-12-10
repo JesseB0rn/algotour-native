@@ -6,7 +6,7 @@
 
 using namespace std;
 
-Postprocessor::Postprocessor(const std::vector<WalkItem> &items) : items(items)
+Postprocessor::Postprocessor(const std::vector<Node> &items) : items(items)
 {
   this->items = items;
 }
@@ -29,7 +29,14 @@ void Postprocessor::writeReprojectedGeoJSON(const char *filename, GeoTiffLoader 
     return;
   }
 
-  OGRLayer *hLayer = hDstDS->CreateLayer("path", NULL, wkbLineString, NULL);
+  OGRSpatialReference *oSRS = new OGRSpatialReference();
+  oSRS->importFromEPSG(2056);
+
+  // set RFC7946=YES to get on the fly reprojection to WGS84
+  char **papszOptions = NULL;
+  papszOptions = CSLSetNameValue(papszOptions, "RFC7946", "YES");
+
+  OGRLayer *hLayer = hDstDS->CreateLayer("path", oSRS, wkbLineString, papszOptions);
   if (!hLayer)
   {
     std::cerr << "Failed to create layer" << std::endl;
@@ -63,7 +70,7 @@ void Postprocessor::simplify()
 
   int oldSize = items.size();
 
-  auto newItems = std::vector<WalkItem>();
+  std::vector<Node> newItems = std::vector<Node>();
   newItems.push_back(items[0]);
   for (int i = 1; i < items.size() - 1; i++)
   {

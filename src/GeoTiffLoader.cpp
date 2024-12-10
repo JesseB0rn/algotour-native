@@ -37,6 +37,7 @@ bool GeoTiffLoader::LoadGeoTiff(const char *filePath)
   GDALRasterBand *band = dataset->GetRasterBand(1);
   buffer = (float *)CPLMalloc(sizeof(float) * nXSize * nYSize);
   auto err = band->RasterIO(GF_Read, 0, 0, nXSize, nYSize, buffer, nXSize, nYSize, GDT_Float32, 0, 0);
+  // auto err = band->ReadRaster(buffer, 0, 0, nXSize, nYSize, nXSize, nYSize, GRIORA_NearestNeighbour);
   if (err != CE_None)
   {
     std::cerr << "Failed to read raster data." << std::endl;
@@ -57,8 +58,8 @@ bool GeoTiffLoader::LoadGeoTiff(const char *filePath)
  */
 float GeoTiffLoader::GetValueFromDatasetBuffer(double lat, double lon)
 {
-  int pixelY = (lat - fwdTransform[0]) / fwdTransform[1];
-  int pixelX = (lon - fwdTransform[3]) / fwdTransform[5];
+  int pixelX, pixelY;
+  convertLatLonToPixel(lat, lon, pixelX, pixelY);
 
   if (pixelX < 0 || pixelX >= nXSize || pixelY < 0 || pixelY >= nYSize)
   {
@@ -77,8 +78,8 @@ float GeoTiffLoader::GetValueFromDatasetBuffer(double lat, double lon)
  */
 float *GeoTiffLoader::GetVRefFromDatasetBuffer(double lat, double lon)
 {
-  int pixelY = (lat - fwdTransform[0]) / fwdTransform[1];
-  int pixelX = (lon - fwdTransform[3]) / fwdTransform[5];
+  int pixelX, pixelY;
+  convertLatLonToPixel(lat, lon, pixelX, pixelY);
 
   if (pixelX < 0 || pixelX >= nXSize || pixelY < 0 || pixelY >= nYSize)
   {
@@ -108,6 +109,14 @@ float *GeoTiffLoader::GetVRefFromDatasetBuffer(int x, int y)
 /**
  * @brief Convert the given lat and lon to pixel coordinates
  *
+ * https://openev.sourceforge.net/app/developer_info/COURSE1_gdal_datamodel.html:
+ * he affine transform consists of six coefficients returned by
+ * GDALDataset::GetGeoTransform() which map pixel/line coordinates into
+ * georeferenced space using the following relationship:
+
+ * Xgeo = GT(0) + Xpixel*GT(1) + Yline*GT(2)
+ * Ygeo = GT(3) + Xpixel*GT(4) + Yline*GT(5)
+ *
  * @param lat LV03+ latitude
  * @param lon LV03+ longitude
  * @param x pixel x coordinate
@@ -115,8 +124,8 @@ float *GeoTiffLoader::GetVRefFromDatasetBuffer(int x, int y)
  */
 void GeoTiffLoader::convertLatLonToPixel(double lat, double lon, int &x, int &y)
 {
-  y = (lat - fwdTransform[0]) / fwdTransform[1];
-  x = (lon - fwdTransform[3]) / fwdTransform[5];
+  x = (lat - fwdTransform[0]) / fwdTransform[1];
+  y = (lon - fwdTransform[3]) / fwdTransform[5];
 }
 
 /**
@@ -127,8 +136,8 @@ void GeoTiffLoader::convertLatLonToPixel(double lat, double lon, int &x, int &y)
  * @param lat LV03+ latitude
  * @param lon LV03+ longitude
  */
-void GeoTiffLoader::convertPixelToLatLon(int x, int y, double &lat, double &lon)
+void GeoTiffLoader::convertPixelToLatLon(int x, int y, double &lon, double &lat)
 {
-  lat = fwdTransform[0] + y * fwdTransform[1];
-  lon = fwdTransform[3] + x * fwdTransform[5];
+  lat = fwdTransform[0] + x * fwdTransform[1];
+  lon = fwdTransform[3] + y * fwdTransform[5];
 }

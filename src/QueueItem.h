@@ -3,27 +3,15 @@
 
 
 
-typedef struct
+struct Node
 {
-  int x_riskmap;
-  int y_riskmap;
-  int x_dem;
-  int y_dem;
-  float totalCost;
-} WalkQueueItem;
+    int x, y;
+    int f, g, h;
 
-typedef struct
-{
-  int x;
-  int y;
-} WalkItem;
+    Node(int r, int c);
 
-struct cmp_walkcost
-{
-  bool operator()(WalkQueueItem left, WalkQueueItem right)
-  {
-    return left.totalCost > right.totalCost;
-  }
+    bool operator>(const Node& other) const;
+    bool operator==(const Node& other) const;
 };
 
 #endif // QUEUEITM_H

@@ -21,148 +21,179 @@ static void Exit(int code)
 float walk_time_cost(float demValueA, float demValueB, float distance)
 {
 
-  const float cd = 0.25;
-  const float ce = 2.5;
+  const float hrPerHm = 1.0 / 400.0;
+  const float hrPerHmSteep = 1.0 / 100.0;
+  const float hrPerSIDist = 1.0 / 4000.0;
+  const float cellSize = 10.0;
 
-  float gradient = (demValueB - demValueA) / distance;
+  const float steepThreshold = tan(45.0 / 180.0 * M_PI);
+
   float elevation_diff = demValueB - demValueA;
-  float steepness_cost = abs(gradient) >= tan(45.0 / 180.0 * M_PI) ? 5.0 : 1.0;
+  float gradient = elevation_diff / distance;
 
-  return distance * cd + abs(elevation_diff) * ce * steepness_cost * distance;
+  /**
+   * h(x) needs to be at most:
+   * 0.2 for height diff
+   * 0.0035 for distance
+   * For riskcost: 50.0
+   *
+   * ----
+   * at least:
+   *
+   * 0.0025 for distance
+   * 0.0 for height diff
+   * 0.0 for riskcost
+   */
+
+  return distance * hrPerSIDist +
+         abs(elevation_diff) * (abs(gradient) >= steepThreshold ? hrPerHmSteep : hrPerHm);
 }
 
-std::vector<WalkItem> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &dem, int nXSize, int nYSize)
+std::vector<Node> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &dem, int nXSize, int nYSize)
 {
-  float startLat = 2693252.0;
-  float startLon = 1203811.0;
+  // float startLat = 269 325 2.0;
+  // float startLon = 1203811.0;
+  // float endLat = 2692215.73;
+  // float endLon = 1201934.15;
 
-  float endLat = 2692215.73;
-  float endLon = 1201934.15;
+  // 2'675'588.26, 1'176'002.85
+  // 2'674'609.10, 1'172'793.45
 
-  WalkItem end = {0, 0};
+  float startLat = 2675588.26;
+  float startLon = 1176002.85;
+  float endLat = 2674609.10;
+  float endLon = 1172793.45;
+
+  Node end(0, 0);
+  Node start(0, 0);
+  riskmap.convertLatLonToPixel(startLat, startLon, start.x, start.y);
   riskmap.convertLatLonToPixel(endLat, endLon, end.x, end.y);
 
-  if (riskmap.GetValueFromDatasetBuffer(startLat, startLon) == NODATA_VALUE || dem.GetValueFromDatasetBuffer(startLat, startLon) == NODATA_VALUE)
+  if (*riskmap.GetVRefFromDatasetBuffer(startLat, startLon) == NODATA_VALUE || *dem.GetVRefFromDatasetBuffer(startLat, startLon) == NODATA_VALUE)
   {
     cout << "Start is NODATA_VALUE" << endl;
-    return std::vector<WalkItem>();
+    return std::vector<Node>();
   }
   if (riskmap.GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE || dem.GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE)
   {
     cout << "End is NODATA_VALUE" << endl;
-    return std::vector<WalkItem>();
+    return std::vector<Node>();
   }
 
   if ((startLat - endLat) * (startLat - endLat) + (startLon - endLon) * (startLon - endLon) >= 20000 * 20000)
   {
     cout << "Start and end are too far apart" << endl;
-    return std::vector<WalkItem>();
+    return std::vector<Node>();
   };
 
-  auto cmp = [](WalkQueueItem left, WalkQueueItem right)
-  { return left.totalCost > right.totalCost; };
-  priority_queue<WalkQueueItem, std::vector<WalkQueueItem>, cmp_walkcost> q = std::priority_queue<WalkQueueItem, std::vector<WalkQueueItem>, cmp_walkcost>();
+  priority_queue<Node, std::vector<Node>, greater<Node>> openList;
+  openList.push(start);
 
-  WalkQueueItem start = {0, 0, 0, 0, 0};
-  riskmap.convertLatLonToPixel(startLat, startLon, start.x_riskmap, start.y_riskmap);
-  dem.convertLatLonToPixel(startLat, startLon, start.x_dem, start.y_dem);
-  q.push(start);
-
-  float maxHeuristic = max(abs(end.x - start.x_riskmap), abs(end.y - start.y_riskmap));
-
-  auto cameFrom = std::unordered_map<int, WalkItem>();
-
-  bool *visited = (bool *)CPLMalloc(sizeof(bool) * nXSize * nYSize);
-  std::fill(visited, visited + nXSize * nYSize, false);
-
+  int8_t *directionX = (int8_t *)CPLMalloc(sizeof(int8_t) * nXSize * nYSize);
+  int8_t *directionY = (int8_t *)CPLMalloc(sizeof(int8_t) * nXSize * nYSize);
+  bool *closedList = (bool *)CPLMalloc(sizeof(bool) * nXSize * nYSize);
   float *accumulatedCost = (float *)CPLMalloc(sizeof(float) * nXSize * nYSize);
+
+  std::fill(closedList, closedList + nXSize * nYSize, false);
+  std::fill(directionX, directionX + nXSize * nYSize, 255);
+  std::fill(directionY, directionY + nXSize * nYSize, 255);
   std::fill(accumulatedCost, accumulatedCost + nXSize * nYSize, INFINITY);
 
-  while (!q.empty())
+  cout << "Start: " << start.x << ", " << start.y << endl;
+
+  while (!openList.empty())
   {
-    WalkQueueItem current = q.top();
-    q.pop();
+    cout << "Openlist size: " << openList.size() << endl;
+    Node current = openList.top();
+    openList.pop();
 
-    if (accumulatedCost[current.x_riskmap + current.y_riskmap * nXSize] < current.totalCost)
+    if (current == end)
     {
-      continue;
-    }
-    accumulatedCost[current.x_riskmap + current.y_riskmap * nXSize] = current.totalCost;
-
-    float *riskmapValue = riskmap.GetVRefFromDatasetBuffer(current.x_riskmap, current.y_riskmap);
-    float *demValue = dem.GetVRefFromDatasetBuffer(current.x_dem, current.y_dem);
-
-    // cout << "Riskmap value: " << *riskmapValue << " DEM value: " << *demValue << endl;
-
-    if (current.x_riskmap == end.x && current.y_riskmap == end.y)
-    {
-      auto path = std::vector<WalkItem>();
-      cout << "Path found" << endl;
-      WalkItem curr = {end.x, end.y};
-
-      while ((curr.x != start.x_riskmap || curr.y != start.y_riskmap))
+      cout << "Path found, backtracking..." << endl;
+      std::vector<Node> path = std::vector<Node>();
+      while (!(current == start))
       {
-        path.push_back(curr);
-        curr = cameFrom[curr.x + curr.y * nXSize];
+        // cout << "Path item: " << current.x << ", " << current.y << endl;
+        path.push_back(current);
+        int i = directionX[current.x * nYSize + current.y];
+        int j = directionY[current.x * nYSize + current.y];
+        current.x -= i;
+        current.y -= j;
       }
       return path;
     }
 
+    float *riskmapValue = riskmap.GetVRefFromDatasetBuffer(current.x, current.y);
+    float *demValue = dem.GetVRefFromDatasetBuffer(current.x, current.y);
+
+    closedList[current.x * nYSize + current.y] = true;
     for (int i = -1; i <= 1; i++)
     {
       for (int j = -1; j <= 1; j++)
       {
-        WalkQueueItem next = {current.x_riskmap + i, current.y_riskmap + j, current.x_dem + i, current.y_dem + j, current.totalCost};
-
-        if (next.x_riskmap < 0 || next.x_riskmap >= nXSize || next.y_riskmap < 0 || next.y_riskmap >= nYSize || i == 0 && j == 0)
+        if (i == 0 && j == 0)
         {
           continue;
         }
 
-        if (next.x_dem < 0 || next.x_dem >= nXSize || next.y_dem < 0 || next.y_dem >= nYSize)
+        int x = current.x + i;
+        int y = current.y + j;
+
+        if (x <= 0 || x > nXSize || y <= 0 || y > nYSize)
         {
           continue;
         }
 
-        float *nextRiskmapValue = riskmap.GetVRefFromDatasetBuffer(next.x_riskmap, next.y_riskmap);
-        float *nextDemValue = dem.GetVRefFromDatasetBuffer(next.x_dem, next.y_dem);
-
-        if (*nextRiskmapValue == NODATA_VALUE || *nextDemValue == NODATA_VALUE)
+        if (closedList[x * nYSize + y])
         {
           continue;
         }
 
-        float heuristic = max(abs(end.x - next.x_riskmap), abs(end.y - next.y_riskmap));
-        if (heuristic > 2 * maxHeuristic)
-        {
-          continue;
-        }
-        /**
-         * Heuristic calculation:
-         * -  cost for riskmap:         0     | 50.0
-         * -  cost for flat wt:
-         *
-         */
-        next.totalCost += 50.0 * (*nextRiskmapValue) + walk_time_cost(*demValue, *nextDemValue, sqrt(i * i + j * j) * 10.0) + heuristic;
+        float *riskmapValueNeighbour = riskmap.GetVRefFromDatasetBuffer(x, y);
+        float *demValueNeighbour = dem.GetVRefFromDatasetBuffer(x, y);
 
-        if (accumulatedCost[next.x_riskmap + next.y_riskmap * nXSize] < next.totalCost)
+        if (*riskmapValueNeighbour == NODATA_VALUE || *demValueNeighbour == NODATA_VALUE)
         {
           continue;
         }
-        cameFrom[next.x_riskmap + next.y_riskmap * riskmap.GetNXSize()] = {current.x_riskmap, current.y_riskmap};
-        q.push(next);
+
+        float distance = sqrt(i * i + j * j) * 10.0;
+        float cost = walk_time_cost(*demValue, *demValueNeighbour, distance);
+
+        cout << "Cost: " << cost << endl;
+
+        Node neighbour(x, y);
+        neighbour.g = current.g + (*riskmapValueNeighbour * 50.0) + cost;
+        neighbour.h = sqrt((end.x - x) * (end.x - x) + (end.y - y) * (end.y - y));
+        // neighbour.h = 0.0;
+        neighbour.f = neighbour.g + neighbour.h;
+
+        if (neighbour.h > 6000)
+        {
+          continue;
+        }
+
+        if (neighbour.g >= accumulatedCost[x * nYSize + y])
+        {
+          continue;
+        }
+
+        directionX[x * nYSize + y] = i;
+        directionY[x * nYSize + y] = j;
+        accumulatedCost[x * nYSize + y] = neighbour.g;
+        openList.push(neighbour);
       }
     }
   }
 
-  cout << "Path found" << endl;
-  return std::vector<WalkItem>();
+  return std::vector<Node>();
 }
 
 int main(int argc, char *argv[])
 {
 
   GDALDatasetUniquePtr poDataset;
+
   GDALAllRegister();
 
   argc = GDALGeneralCmdLineProcessor(argc, &argv, 0);
@@ -176,11 +207,17 @@ int main(int argc, char *argv[])
   cout << "DEM" << pszFilenameDEM << "read" << endl;
 
   cout << "Rasters read successfully, ready" << endl;
-
-  // float a = riskmap_loader->GetValueFromDatasetBuffer(2662390.000000, 1239740.000000);
-  // float b = dem_loader->GetValueFromDatasetBuffer(2662390.000000, 1239740.000000);
-
-  // cout << "Value at 2662390.000000, 1239740.000000: " << a << "@ " << b << "müM" << endl;
+  // 2676023.8,1175322.7
+  for (int i = 0; i < 10; i++)
+  {
+    int x, y;
+    cin >> x;
+    cin >> y;
+    float a = riskmap_loader->GetValueFromDatasetBuffer(x, y);
+    float b = dem_loader->GetValueFromDatasetBuffer(x, y);
+    cout << "Value at " << x << ", " << y << ": " << a << "@ " << b << "müM" << endl;
+  }
+  Exit(0);
 
   auto pth = runWalkOnRasters(*riskmap_loader, *dem_loader, riskmap_loader->GetNXSize(), riskmap_loader->GetNYSize());
   // for (auto &item : pth)
@@ -190,7 +227,7 @@ int main(int argc, char *argv[])
   //   cout << "Path item: " << lat << ", " << lon << endl;
   // }
   Postprocessor *po = new Postprocessor(pth);
-  po->simplify();
+  // po->simplify();
   po->writeReprojectedGeoJSON("/Users/jesseb0rn/Documents/repos/algotour-native/out.json", riskmap_loader);
 
   riskmap_loader->~GeoTiffLoader();
