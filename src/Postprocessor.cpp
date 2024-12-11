@@ -63,30 +63,96 @@ void Postprocessor::writeReprojectedGeoJSON(const char *filename, GeoTiffLoader 
   OGRFeature::DestroyFeature(poFeature);
   GDALClose(hDstDS);
 }
+
+/**
+ * @brief Simplify the path using the Douglas-Peucker algorithm
+ * function DouglasPeucker(PointList[], epsilon)
+    // Finde den Punkt mit dem größten Abstand
+    dmax = 0
+    index = 0
+    for i = 2 to (length(PointList) −1)
+        d = LotrechterAbstand(PointList[i], Line(PointList[1], PointList[end]))
+        if d > dmax
+            index = i
+            dmax = d
+    // Wenn die maximale Entfernung größer als Epsilon ist, dann rekursiv vereinfachen
+    if dmax > epsilon
+        // Recursive call
+        recResults1[] = DouglasPeucker(PointList[1...index], epsilon)
+        recResults2[] = DouglasPeucker(PointList[index...end], epsilon)
+        // Ergebnisliste aufbauen
+        ResultList[] = {recResults1[1...end-1], recResults2[1...end]}
+    else
+        ResultList[] = {PointList[1], PointList[end]}
+    // Ergebnis zurückgeben
+    return ResultList[]
+end
+ *
+ *
+ */
 void Postprocessor::simplify()
 {
-  // Simplify the path
-  // if the curvature is not larger than a certain threshold, do not copy the point to the new path
-
   int oldSize = items.size();
 
   std::vector<Node> newItems = std::vector<Node>();
-  newItems.push_back(items[0]);
-  for (int i = 1; i < items.size() - 1; i++)
-  {
-    int dx1 = items[i].x - items[i - 1].x;
-    int dy1 = items[i].y - items[i - 1].y;
-    int dx2 = items[i + 1].x - items[i].x;
-    int dy2 = items[i + 1].y - items[i].y;
+  // newItems.push_back(items[0]);
+  // for (int i = 1; i < items.size() - 1; i++)
+  // {
+  //   int dx1 = items[i].x - items[i - 1].x;
+  //   int dy1 = items[i].y - items[i - 1].y;
+  //   int dx2 = items[i + 1].x - items[i].x;
+  //   int dy2 = items[i + 1].y - items[i].y;
 
-    if (abs(dx1 * dy2) * abs(dx2 * dy1) != 0)
-    {
-      newItems.push_back(items[i]);
-    }
-  }
-  newItems.push_back(items[items.size() - 1]);
+  //   if (abs(dx1 * dy2) * abs(dx2 * dy1) != 0)
+  //   {
+  //     newItems.push_back(items[i]);
+  //   }
+  // }
+  // newItems.push_back(items[items.size() - 1]);
+  // items = newItems;
+  newItems = this->douglasPeucker(items.begin(), items.end() - 1, 5.5);
   items = newItems;
 
   int newSize = items.size();
   std::cout << "Simplified path from " << oldSize << " to " << newSize << " points" << std::endl;
+}
+
+double Postprocessor::distanceToLine(Node pA, Node pTest, Node pB)
+{
+  double A = pB.y - pA.y;
+  double B = pA.x - pB.x;
+  double C = pB.x * pA.y - pA.x * pB.y;
+
+  return abs(A * pTest.x + B * pTest.y + C) / sqrt(A * A + B * B);
+}
+std::vector<Node> Postprocessor::douglasPeucker(std::vector<Node>::iterator start, std::vector<Node>::iterator end, double epsilon)
+{
+  std::vector<Node> resultsList = {};
+
+  auto maxDistance = 0.0;
+  auto farthestIndex = start;
+
+  for (auto it = start + 1; it != end; ++it)
+  {
+    double distance = distanceToLine(*start, *it, *end);
+    if (distance > maxDistance)
+    {
+      maxDistance = distance;
+      farthestIndex = it;
+    }
+  }
+
+  if (maxDistance > epsilon)
+  {
+
+    auto recResults1 = douglasPeucker(start, farthestIndex, epsilon);
+    auto recResults2 = douglasPeucker(farthestIndex, end, epsilon);
+    resultsList.insert(resultsList.end(), recResults1.begin(), recResults1.end() - 1);
+    resultsList.insert(resultsList.end(), recResults2.begin(), recResults2.end());
+  }
+  else
+  {
+    resultsList = {*start, *end};
+  }
+  return resultsList;
 }

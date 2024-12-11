@@ -229,7 +229,7 @@ int main(int argc, char *argv[])
   //   cout << "Path item: " << lat << ", " << lon << endl;
   // }
   Postprocessor *po = new Postprocessor(pth);
-  // po->simplify();
+  po->simplify();
   po->writeReprojectedGeoJSON("/Users/jesseb0rn/Documents/repos/algotour-native/out.json", riskmap_loader);
 
   riskmap_loader->~GeoTiffLoader();
