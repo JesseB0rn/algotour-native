@@ -86,6 +86,8 @@ std::vector<Node> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &dem, i
     return std::vector<Node>();
   };
 
+  float *demValueEnd = dem.GetVRefFromDatasetBuffer(end.x, end.y);
+
   priority_queue<Node, std::vector<Node>, greater<Node>> openList;
   openList.push(start);
 
@@ -103,7 +105,7 @@ std::vector<Node> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &dem, i
 
   while (!openList.empty())
   {
-    cout << "Openlist size: " << openList.size() << endl;
+    // cout << "Openlist size: " << openList.size() << endl;
     Node current = openList.top();
     openList.pop();
 
@@ -160,11 +162,11 @@ std::vector<Node> runWalkOnRasters(GeoTiffLoader &riskmap, GeoTiffLoader &dem, i
         float distance = sqrt(i * i + j * j) * 10.0;
         float cost = walk_time_cost(*demValue, *demValueNeighbour, distance);
 
-        cout << "Cost: " << cost << endl;
+        // cout << "Cost: " << cost << endl;
 
         Node neighbour(x, y);
         neighbour.g = current.g + (*riskmapValueNeighbour * 50.0) + cost;
-        neighbour.h = sqrt((end.x - x) * (end.x - x) + (end.y - y) * (end.y - y));
+        neighbour.h = walk_time_cost(*demValue, *demValue, sqrt((end.x - x) * (end.x - x) + (end.y - y) * (end.y - y)));
         // neighbour.h = 0.0;
         neighbour.f = neighbour.g + neighbour.h;
 
@@ -208,16 +210,16 @@ int main(int argc, char *argv[])
 
   cout << "Rasters read successfully, ready" << endl;
   // 2676023.8,1175322.7
-  for (int i = 0; i < 10; i++)
-  {
-    int x, y;
-    cin >> x;
-    cin >> y;
-    float a = riskmap_loader->GetValueFromDatasetBuffer(x, y);
-    float b = dem_loader->GetValueFromDatasetBuffer(x, y);
-    cout << "Value at " << x << ", " << y << ": " << a << "@ " << b << "müM" << endl;
-  }
-  Exit(0);
+  // for (int i = 0; i < 10; i++)
+  // {
+  //   int x, y;
+  //   cin >> x;
+  //   cin >> y;
+  //   float a = riskmap_loader->GetValueFromDatasetBuffer(x, y);
+  //   float b = dem_loader->GetValueFromDatasetBuffer(x, y);
+  //   cout << "Value at " << x << ", " << y << ": " << a << "@ " << b << "müM" << endl;
+  // }
+  // Exit(0);
 
   auto pth = runWalkOnRasters(*riskmap_loader, *dem_loader, riskmap_loader->GetNXSize(), riskmap_loader->GetNYSize());
   // for (auto &item : pth)

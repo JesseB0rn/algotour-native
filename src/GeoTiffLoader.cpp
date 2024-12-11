@@ -138,6 +138,6 @@ void GeoTiffLoader::convertLatLonToPixel(double lat, double lon, int &x, int &y)
  */
 void GeoTiffLoader::convertPixelToLatLon(int x, int y, double &lon, double &lat)
 {
-  lat = fwdTransform[0] + x * fwdTransform[1];
-  lon = fwdTransform[3] + y * fwdTransform[5];
+  lon = fwdTransform[0] + x * fwdTransform[1];
+  lat = fwdTransform[3] + y * fwdTransform[5];
 }
