@@ -8,7 +8,7 @@ set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Add the executable
-add_executable(AlgotourNative src/main.cpp src/GeoTiffLoader.cpp src/GeoTiffLoader.h src/Postprocessor.cpp src/Postprocessor.h src/QueueItem.cpp src/QueueItem.h)
+add_executable(AlgotourNative src/main.cpp src/GeoTiffLoader.cpp src/GeoTiffLoader.h src/Postprocessor.cpp src/Postprocessor.h src/QueueItem.cpp src/QueueItem.h src/RouteRequest.h src/RouteRequest.cpp)
 
 # Find GDAL package
 find_package(GDAL REQUIRED)

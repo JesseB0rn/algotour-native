@@ -13,7 +13,7 @@ Postprocessor::Postprocessor(const std::vector<Node> &items) : items(items)
 
 // Postprocessor::~Postprocessor() {}
 
-void Postprocessor::writeReprojectedGeoJSON(const char *filename, GeoTiffLoader *riskmap)
+void Postprocessor::writeReprojectedGeoJSON(const char *filename)
 {
   GDALDriver *poDriver = GetGDALDriverManager()->GetDriverByName("GeoJSON");
   if (!poDriver)
@@ -44,11 +44,10 @@ void Postprocessor::writeReprojectedGeoJSON(const char *filename, GeoTiffLoader 
   }
 
   OGRLineString *line = new OGRLineString();
-  for (auto item : items)
+  for (auto p : smoothPath)
   {
     double lat, lon;
-    riskmap->convertPixelToLatLon(item.x, item.y, lat, lon);
-    // cout << "Path item: " << lat << ", " << lon << endl;
+    std::tie(lat, lon) = p;
     line->addPoint(lat, lon);
   }
 
@@ -155,4 +154,44 @@ std::vector<Node> Postprocessor::douglasPeucker(std::vector<Node>::iterator star
     resultsList = {*start, *end};
   }
   return resultsList;
+}
+
+/**
+ * @brief Smooth using Chaikin's algorithm
+ */
+void Postprocessor::smooth(GeoTiffLoader *riskmap)
+{
+  int oldSize = items.size();
+  std::vector<std::tuple<double, double>> newItems = std::vector<std::tuple<double, double>>();
+
+  // convert Node(screen coordinates) to tuple (geographical coordinates)
+  for (auto p : items)
+  {
+    double lat, lon;
+    riskmap->convertPixelToLatLon(p.x, p.y, lat, lon);
+    newItems.push_back(std::make_tuple(lat, lon));
+  }
+
+  // Chaikin's algorithm for 3 iterations
+  for (int iters = 0; iters < 3; iters++)
+  {
+    std::vector<std::tuple<double, double>> smoothed = std::vector<std::tuple<double, double>>();
+    for (int i = 0; i < newItems.size() - 1; i++)
+    {
+      double x1, y1, x2, y2;
+      std::tie(x1, y1) = newItems[i];
+      std::tie(x2, y2) = newItems[i + 1];
+
+      double x1new = 0.75 * x1 + 0.25 * x2;
+      double y1new = 0.75 * y1 + 0.25 * y2;
+      double x2new = 0.25 * x1 + 0.75 * x2;
+      double y2new = 0.25 * y1 + 0.75 * y2;
+
+      smoothed.push_back(std::make_tuple(x1new, y1new));
+      smoothed.push_back(std::make_tuple(x2new, y2new));
+    }
+    newItems = smoothed;
+  }
+
+  smoothPath = newItems;
 }
