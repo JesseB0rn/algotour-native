@@ -4,8 +4,11 @@
 #include <queue>
 #include <chrono>
 #include <uuid/uuid.h>
+#include <mutex>
 
 using namespace std;
+
+std::mutex mtx;
 
 RouteRequest::RouteRequest(std::tuple<double, double> start, std::tuple<double, double> end, GeoTiffLoader &riskmap, GeoTiffLoader &dem) : start(start), end(end), riskmap(riskmap), dem(dem)
 {
@@ -200,19 +203,24 @@ void RouteRequest::run()
   auto tstart = chrono::high_resolution_clock::now();
 
   std::vector<Node> path = runWalkOnRasters();
-  Postprocessor *po = new Postprocessor(path);
-  po->simplify();
-  po->smooth(&riskmap);
 
-  uuid_t uuid;
-  uuid_generate(uuid);
-  char uuid_str[37];
-  uuid_unparse(uuid, uuid_str);
+  {
+    std::lock_guard<std::mutex> lock(mtx);
+    Postprocessor *po = new Postprocessor(path);
+    po->simplify();
+    po->smooth(&riskmap);
 
-  const char *basepath = "/Users/jesseb0rn/Documents/repos/algotour-native/out/";
-  string filename = basepath + string(uuid_str) + ".geojson";
+    uuid_t uuid;
+    uuid_generate(uuid);
+    char uuid_str[37];
+    uuid_unparse(uuid, uuid_str);
 
-  po->writeReprojectedGeoJSON(filename.c_str());
+    const char *basepath = "/Users/jesseb0rn/Documents/repos/algotour-native/out/";
+    string filename = basepath + string(uuid_str) + ".geojson";
+
+    po->writeReprojectedGeoJSON(filename.c_str());
+    delete po;
+  }
 
   auto tend = chrono::high_resolution_clock::now();
   cout << "Found Path, simplify and store in " << chrono::duration_cast<chrono::milliseconds>(tend - tstart).count() << " ms" << endl;

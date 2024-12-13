@@ -7,6 +7,9 @@
 #include "QueueItem.h"
 #include "RouteRequest.h"
 
+// TODO: Make postprocessing class only expose static api, remove constructor and side effects
+// TODO: Implement calling from gRPC (act as server)
+
 using namespace std;
 
 static void Exit(int code)
@@ -36,11 +39,17 @@ int main(int argc, char *argv[])
 
   cout << "---- [ READY ] ----" << endl;
 
-  auto rq = new RouteRequest({2675588.26, 1176002.85}, {2674609.10, 1172793.45}, *riskmap_loader, *dem_loader);
+  auto rq1 = new RouteRequest({2675588.26, 1176002.85}, {2674609.10, 1172793.45}, *riskmap_loader, *dem_loader);
   auto rq2 = new RouteRequest({2674609.10, 1172793.45}, {2677741.71, 1172468.75}, *riskmap_loader, *dem_loader);
 
-  rq->run();
-  rq2->run();
+  // rq1->run();
+  // rq2->run();
+
+  thread t1(&RouteRequest::run, rq1);
+  thread t2(&RouteRequest::run, rq2);
+
+  t1.join();
+  t2.join();
 
   riskmap_loader->~GeoTiffLoader();
   dem_loader->~GeoTiffLoader();
