@@ -1,3 +1,4 @@
 build/
 riskmaps/
 out.json
+.DS_Store

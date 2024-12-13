@@ -6,14 +6,9 @@
 
 using namespace std;
 
-Postprocessor::Postprocessor(const std::vector<Node> &items) : items(items)
-{
-  this->items = items;
-}
-
 // Postprocessor::~Postprocessor() {}
 
-void Postprocessor::writeReprojectedGeoJSON(const char *filename)
+void Postprocessor::writeReprojectedGeoJSON(const std::vector<std::tuple<double, double>> &path, const char *filename)
 {
   GDALDriver *poDriver = GetGDALDriverManager()->GetDriverByName("GeoJSON");
   if (!poDriver)
@@ -44,7 +39,7 @@ void Postprocessor::writeReprojectedGeoJSON(const char *filename)
   }
 
   OGRLineString *line = new OGRLineString();
-  for (auto p : smoothPath)
+  for (auto p : path)
   {
     double lat, lon;
     std::tie(lat, lon) = p;
@@ -89,28 +84,12 @@ end
  *
  *
  */
-void Postprocessor::simplify()
+void Postprocessor::simplify(std::vector<Node> &items)
 {
   int oldSize = items.size();
 
   std::vector<Node> newItems = std::vector<Node>();
-  // newItems.push_back(items[0]);
-  // for (int i = 1; i < items.size() - 1; i++)
-  // {
-  //   int dx1 = items[i].x - items[i - 1].x;
-  //   int dy1 = items[i].y - items[i - 1].y;
-  //   int dx2 = items[i + 1].x - items[i].x;
-  //   int dy2 = items[i + 1].y - items[i].y;
-
-  //   if (abs(dx1 * dy2) * abs(dx2 * dy1) != 0)
-  //   {
-  //     newItems.push_back(items[i]);
-  //   }
-  // }
-  // newItems.push_back(items[items.size() - 1]);
-  // items = newItems;
-  newItems = this->douglasPeucker(items.begin(), items.end() - 1, 5.5);
-  items = newItems;
+  items = Postprocessor::douglasPeucker(items.begin(), items.end() - 1, 5.5);
 
   int newSize = items.size();
   std::cout << "Simplified path from " << oldSize << " to " << newSize << " points" << std::endl;
@@ -159,7 +138,7 @@ std::vector<Node> Postprocessor::douglasPeucker(std::vector<Node>::iterator star
 /**
  * @brief Smooth using Chaikin's algorithm
  */
-void Postprocessor::smooth(GeoTiffLoader *riskmap)
+std::vector<std::tuple<double, double>> Postprocessor::smooth(std::vector<Node> &items, GeoTiffLoader *riskmap)
 {
   int oldSize = items.size();
   std::vector<std::tuple<double, double>> newItems = std::vector<std::tuple<double, double>>();
@@ -193,5 +172,5 @@ void Postprocessor::smooth(GeoTiffLoader *riskmap)
     newItems = smoothed;
   }
 
-  smoothPath = newItems;
+  return newItems;
 }

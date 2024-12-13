@@ -69,7 +69,11 @@
     "text_encoding": "cpp",
     "thread": "cpp",
     "cinttypes": "cpp",
-    "queue": "cpp"
+    "queue": "cpp",
+    "__node_handle": "cpp",
+    "map": "cpp",
+    "set": "cpp",
+    "span": "cpp"
   },
   "makefile.makefilePath": "build/Makefile",
   "C_Cpp.default.compilerPath": "/usr/bin/clang++"

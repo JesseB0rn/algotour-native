@@ -7,7 +7,6 @@
 #include "QueueItem.h"
 #include "RouteRequest.h"
 
-// TODO: Make postprocessing class only expose static api, remove constructor and side effects
 // TODO: Implement calling from gRPC (act as server)
 
 using namespace std;

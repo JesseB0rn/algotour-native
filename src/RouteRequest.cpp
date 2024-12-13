@@ -206,9 +206,9 @@ void RouteRequest::run()
 
   {
     std::lock_guard<std::mutex> lock(mtx);
-    Postprocessor *po = new Postprocessor(path);
-    po->simplify();
-    po->smooth(&riskmap);
+
+    Postprocessor::simplify(path);
+    auto smoothed = Postprocessor::smooth(path, &riskmap);
 
     uuid_t uuid;
     uuid_generate(uuid);
@@ -218,8 +218,7 @@ void RouteRequest::run()
     const char *basepath = "/Users/jesseb0rn/Documents/repos/algotour-native/out/";
     string filename = basepath + string(uuid_str) + ".geojson";
 
-    po->writeReprojectedGeoJSON(filename.c_str());
-    delete po;
+    Postprocessor::writeReprojectedGeoJSON(smoothed, filename.c_str());
   }
 
   auto tend = chrono::high_resolution_clock::now();
