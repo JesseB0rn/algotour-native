@@ -7,6 +7,14 @@
 #include "QueueItem.h"
 #include "RouteRequest.h"
 
+#include <absl/flags/flag.h>
+#include <absl/flags/parse.h>
+#include <absl/strings/str_format.h>
+
+ABSL_FLAG(std::string, riskmap_path, "", "Path to the riskmap GeoTIFF file");
+ABSL_FLAG(std::string, dem_path, "", "Path to the DEM GeoTIFF file");
+ABSL_FLAG(uint16_t, port, 50051, "Port to listen on");
+
 // TODO: Implement calling from gRPC (act as server)
 
 using namespace std;
@@ -21,19 +29,18 @@ static void Exit(int code)
 
 int main(int argc, char *argv[])
 {
+  absl::ParseCommandLine(argc, argv);
 
   GDALDatasetUniquePtr poDataset;
 
   GDALAllRegister();
 
-  argc = GDALGeneralCmdLineProcessor(argc, &argv, 0);
+  std::string pszFilenameRiskmap = absl::StrFormat("%s", absl::GetFlag(FLAGS_riskmap_path));
+  std::string pszFilenameDEM = absl::StrFormat("%s", absl::GetFlag(FLAGS_dem_path));
 
-  const char *pszFilenameRiskmap = argv[1];
-  const char *pszFilenameDEM = argv[2];
-
-  GeoTiffLoader *riskmap_loader = new GeoTiffLoader(pszFilenameRiskmap);
+  GeoTiffLoader *riskmap_loader = new GeoTiffLoader(pszFilenameRiskmap.c_str());
   cout << "[Riskmap] : " << pszFilenameRiskmap << endl;
-  GeoTiffLoader *dem_loader = new GeoTiffLoader(pszFilenameDEM);
+  GeoTiffLoader *dem_loader = new GeoTiffLoader(pszFilenameDEM.c_str());
   cout << "[DEM]     : " << pszFilenameDEM << endl;
 
   cout << "---- [ READY ] ----" << endl;

@@ -1,0 +1,25 @@
+// compile with: protoc -I=./src/protos --cpp_out ./src/api ./src/protos/algotourrouter.proto
+
+syntax = "proto3";
+
+package algotourrouter;
+
+// The request message containing the user's query.
+message QueryRequest {
+  string startLon = 1;
+  string startLat = 2;
+  string endLon = 3;
+  string endLat = 4;
+
+  // string algorithm = 5;
+}
+
+// The response message containing the results of the query.
+message QueryResponse {
+  string pathFile = 1;
+}
+
+// The Algorouter service definition.
+service Algorouter {
+  rpc SendQuery (QueryRequest) returns (QueryResponse);
+}
