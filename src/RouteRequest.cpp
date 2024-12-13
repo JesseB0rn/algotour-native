@@ -198,12 +198,12 @@ std::vector<Node> RouteRequest::runWalkOnRasters()
   return std::vector<Node>();
 }
 
-void RouteRequest::run()
+std::string RouteRequest::run()
 {
   auto tstart = chrono::high_resolution_clock::now();
 
   std::vector<Node> path = runWalkOnRasters();
-
+  string filename;
   {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -216,11 +216,13 @@ void RouteRequest::run()
     uuid_unparse(uuid, uuid_str);
 
     const char *basepath = "/Users/jesseb0rn/Documents/repos/algotour-native/out/";
-    string filename = basepath + string(uuid_str) + ".geojson";
+    filename = basepath + string(uuid_str) + ".geojson";
 
     Postprocessor::writeReprojectedGeoJSON(smoothed, filename.c_str());
   }
 
   auto tend = chrono::high_resolution_clock::now();
   cout << "Found Path, simplify and store in " << chrono::duration_cast<chrono::milliseconds>(tend - tstart).count() << " ms" << endl;
+
+  return filename;
 }

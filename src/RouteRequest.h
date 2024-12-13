@@ -9,7 +9,7 @@ class RouteRequest
 {
 public:
   RouteRequest(std::tuple<double, double> start, std::tuple<double, double> end, GeoTiffLoader &riskmap, GeoTiffLoader &dem);
-  void run();
+  std::string run();
 
 private:
   std::tuple<double, double> start;
