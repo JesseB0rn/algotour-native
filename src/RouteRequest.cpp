@@ -49,7 +49,7 @@ float RouteRequest::walk_time_cost(float demValueA, float demValueB, float dista
          abs(elevation_diff) * (abs(gradient) >= steepThreshold ? hrPerHmSteep : hrPerHm);
 }
 
-std::vector<Node> RouteRequest::runWalkOnRasters()
+std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, double *progress)
 {
   // float startLat = 269 325 2.0;
   // float startLon = 1203811.0;
@@ -76,22 +76,41 @@ std::vector<Node> RouteRequest::runWalkOnRasters()
   riskmap.convertLatLonToPixel(startLat, startLon, start.x, start.y);
   riskmap.convertLatLonToPixel(endLat, endLon, end.x, end.y);
 
+  if (start.x <= 0 || start.x > nXSize || start.y <= 0 || start.y > nYSize)
+  {
+    cout << "Start is out of bounds" << endl;
+    status = RouteRequestStatus::FAILURE_OUT_OF_BOUNDS;
+    return std::vector<Node>();
+  }
+  if (end.x <= 0 || end.x > nXSize || end.y <= 0 || end.y > nYSize)
+  {
+    cout << "End is out of bounds" << endl;
+    status = RouteRequestStatus::FAILURE_OUT_OF_BOUNDS;
+    return std::vector<Node>();
+  }
+
   if (*riskmap.GetVRefFromDatasetBuffer(startLat, startLon) == NODATA_VALUE || *dem.GetVRefFromDatasetBuffer(startLat, startLon) == NODATA_VALUE)
   {
     cout << "Start is NODATA_VALUE" << endl;
+    status = RouteRequestStatus::FAILURE_OUT_OF_BOUNDS;
     return std::vector<Node>();
   }
   if (riskmap.GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE || dem.GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE)
   {
     cout << "End is NODATA_VALUE" << endl;
+    status = RouteRequestStatus::FAILURE_OUT_OF_BOUNDS;
     return std::vector<Node>();
   }
 
   if ((startLat - endLat) * (startLat - endLat) + (startLon - endLon) * (startLon - endLon) >= 20000 * 20000)
   {
     cout << "Start and end are too far apart" << endl;
+    status = RouteRequestStatus::FAILURE_USER_IS_A_DICK;
+
     return std::vector<Node>();
   };
+
+  float totalDistance = sqrt((start.x - end.x) * (start.x - end.x) + (start.y - end.y) * (start.y - end.y));
 
   float *demValueEnd = dem.GetVRefFromDatasetBuffer(end.x, end.y);
 
@@ -129,6 +148,7 @@ std::vector<Node> RouteRequest::runWalkOnRasters()
         current.x -= i;
         current.y -= j;
       }
+      status = RouteRequestStatus::SUCCESS;
       return path;
     }
 
@@ -171,9 +191,17 @@ std::vector<Node> RouteRequest::runWalkOnRasters()
 
         // cout << "Cost: " << cost << endl;
 
+        float remDistance = sqrt((end.x - x) * (end.x - x) + (end.y - y) * (end.y - y));
+
+        if (progress)
+        {
+          *progress = remDistance / totalDistance;
+        }
+
         Node neighbour(x, y);
         neighbour.g = current.g + (*riskmapValueNeighbour * 50.0) + cost;
-        neighbour.h = walk_time_cost(*demValue, *demValue, sqrt((end.x - x) * (end.x - x) + (end.y - y) * (end.y - y)));
+
+        neighbour.h = walk_time_cost(*demValue, *demValue, remDistance);
         // neighbour.h = 0.0;
         neighbour.f = neighbour.g + neighbour.h;
 
@@ -194,16 +222,23 @@ std::vector<Node> RouteRequest::runWalkOnRasters()
       }
     }
   }
-
+  status = RouteRequestStatus::FAILURE_NO_PATH;
   return std::vector<Node>();
 }
 
-std::string RouteRequest::run()
+RouteRequestStatus RouteRequest::run(std::string &filename, double *progress)
 {
   auto tstart = chrono::high_resolution_clock::now();
 
-  std::vector<Node> path = runWalkOnRasters();
-  string filename;
+  RouteRequestStatus status = RouteRequestStatus::FAILURE_UNKNOWN;
+  std::vector<Node> path = runWalkOnRasters(status, progress);
+
+  if (status != RouteRequestStatus::SUCCESS)
+  {
+    cout << "Failed to find path" << endl;
+    return status;
+  }
+  // string filename;
   {
     std::lock_guard<std::mutex> lock(mtx);
 
@@ -224,5 +259,5 @@ std::string RouteRequest::run()
   auto tend = chrono::high_resolution_clock::now();
   cout << "Found Path, simplify and store in " << chrono::duration_cast<chrono::milliseconds>(tend - tstart).count() << " ms" << endl;
 
-  return filename;
+  return RouteRequestStatus::SUCCESS;
 }

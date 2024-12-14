@@ -73,7 +73,9 @@
     "__node_handle": "cpp",
     "map": "cpp",
     "set": "cpp",
-    "span": "cpp"
+    "span": "cpp",
+    "stop_token": "cpp",
+    "*.inc": "cpp"
   },
   "makefile.makefilePath": "build/Makefile",
   "C_Cpp.default.compilerPath": "/usr/bin/clang++"

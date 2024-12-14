@@ -1,0 +1,23 @@
+{
+  "startLon": 1176002.85,
+  "startLat": 2675588.26,
+  "endLon": 1172793.45,
+  "endLat": 2674609.1
+}
+
+
+
+---
+
+
+
+{
+  "startLon": 1176002.85,
+  "startLat": 2675588.26,
+  "endLon": 1172468.75,
+  "endLat": 2677741.71
+}
+
+
+grpcurl  -d '{"startLon":1176002.85,"startLat":2675588.26,"endLon":1172468.75,"endLat":2677741.71}'  -max-time=5  -import-path / -proto /Users/jesseb0rn/Documents/repos/algotour-native/src/protos/algotourrouter.proto -plaintext localhost:50051  algotourrouter.Algorouter/DoRouting
+grpcurl  -d '{"startLon":1176002.85,"startLat":2675588.26,"endLon":1172468.75,"endLat":-23.71}'  -max-time=5  -import-path / -proto /Users/jesseb0rn/Documents/repos/algotour-native/src/protos/algotourrouter.proto -plaintext localhost:50051  algotourrouter.Algorouter/DoRouting

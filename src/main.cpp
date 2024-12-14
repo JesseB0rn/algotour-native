@@ -21,8 +21,6 @@ ABSL_FLAG(std::string, riskmap_path, "", "Path to the riskmap GeoTIFF file");
 ABSL_FLAG(std::string, dem_path, "", "Path to the DEM GeoTIFF file");
 ABSL_FLAG(uint16_t, port, 50051, "Port to listen on");
 
-// TODO: Implement calling from gRPC (act as server)
-
 using namespace std;
 using grpc::CallbackServerContext;
 using grpc::Server;
@@ -59,14 +57,40 @@ public:
   ServerUnaryReactor *DoRouting(CallbackServerContext *context, const RouteRequestRPC *request, RouteResponse *reply) override
   {
     ServerUnaryReactor *reactor = context->DefaultReactor();
-    cout << "Received request" << endl;
+    cout << "---- Received request ----" << endl;
 
     auto rq = new RouteRequest({request->startlat(), request->startlon()}, {request->endlat(), request->endlon()}, *riskmap_loader, *dem_loader);
-    auto pth = rq->run();
+    std::string pth;
+    RouteRequestStatus _status = (rq->run(pth));
+
+    if (_status != RouteRequestStatus::SUCCESS)
+    {
+      grpc::Status grpc_status = Status(grpc::StatusCode::INVALID_ARGUMENT, "Invalid request");
+      switch (_status)
+      {
+      case RouteRequestStatus::FAILURE_OUT_OF_BOUNDS:
+        grpc_status = Status(grpc::StatusCode::OUT_OF_RANGE, "Out of bounds");
+        break;
+      case RouteRequestStatus::FAILURE_NO_PATH:
+        grpc_status = Status(grpc::StatusCode::NOT_FOUND, "No path found");
+        break;
+      case RouteRequestStatus::FAILURE_USER_IS_A_DICK:
+        grpc_status = Status(grpc::StatusCode::PERMISSION_DENIED, "Start and Endpoint too far apart");
+        break;
+      case RouteRequestStatus::FAILURE_UNKNOWN:
+      case RouteRequestStatus::SUCCESS:
+        grpc_status = Status(grpc::StatusCode::INTERNAL, "Internal error");
+        break;
+      }
+      reply->set_pathfile("");
+      reactor->Finish(grpc_status);
+      return reactor;
+    }
 
     reply->set_pathfile(pth.c_str());
 
     reactor->Finish(Status::OK);
+    cout << "---- Done ----" << endl;
     return reactor;
   };
   GeoTiffLoader *riskmap_loader;
