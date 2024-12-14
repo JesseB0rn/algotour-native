@@ -2,3 +2,6 @@ build/
 riskmaps/
 out.json
 .DS_Store
+QueueWorker/env
+QueueWorker/firebase.json
+QueueWorker/__pycache__/
