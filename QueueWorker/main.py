@@ -24,10 +24,8 @@ def process_new_document(doc_data: dict, ref):
 
     with grpc.insecure_channel("localhost:50051") as channel:
       stub = algotourrouter_pb2_grpc.AlgorouterStub(channel)
-      rrrpc = algotourrouter_pb2.RouteRequestRPC(startLon=1176002.85, startLat=2675588.26, endLon=1172468.75, endLat=2677741.71)
+      rrrpc = algotourrouter_pb2.RouteRequestRPC(startLon=doc_data['startpoint'].longitude, startLat=doc_data['startpoint'].latitude, endLon=doc_data['endpoint'].longitude, endLat=doc_data['endpoint'].latitude)
       path_future = stub.DoRouting.future(rrrpc, timeout=10)
-
-
 
       print(outpath := path_future.result().pathFile)
       with open(outpath) as o:

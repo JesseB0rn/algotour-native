@@ -10,7 +10,6 @@ message RouteRequestRPC {
   double startLat = 2;
   double endLon = 3;
   double endLat = 4;
-
   // string algorithm = 5;
 }
 

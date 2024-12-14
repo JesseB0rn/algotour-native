@@ -59,9 +59,19 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
   // 2'675'588.26, 1'176'002.85
   // 2'674'609.10, 1'172'793.45
 
-  float startLat, startLon, endLat, endLon;
+  double startLat, startLon, endLat, endLon;
   std::tie(startLat, startLon) = start;
   std::tie(endLat, endLon) = end;
+
+  OGRSpatialReference wgs84;
+  OGRSpatialReference epsg2056;
+
+  wgs84.SetWellKnownGeogCS("WGS84");
+  epsg2056.importFromEPSG(2056);
+
+  OGRCoordinateTransformation *coordTrans = OGRCreateCoordinateTransformation(&wgs84, &epsg2056);
+  coordTrans->Transform(1, &startLat, &startLon);
+  coordTrans->Transform(1, &endLat, &endLon);
 
   // float startLat = 2675588.26;
   // float startLon = 1176002.85;
