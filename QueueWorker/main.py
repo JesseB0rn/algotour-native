@@ -2,6 +2,7 @@ import algotourrouter_pb2
 import algotourrouter_pb2_grpc
 
 import grpc
+from grpc_status import rpc_status
 import firebase_admin
 from firebase_admin import credentials, firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
@@ -25,17 +26,31 @@ def process_new_document(doc_data: dict, ref):
     with grpc.insecure_channel("localhost:50051") as channel:
       stub = algotourrouter_pb2_grpc.AlgorouterStub(channel)
       rrrpc = algotourrouter_pb2.RouteRequestRPC(startLon=doc_data['startpoint'].longitude, startLat=doc_data['startpoint'].latitude, endLon=doc_data['endpoint'].longitude, endLat=doc_data['endpoint'].latitude)
-      path_future = stub.DoRouting.future(rrrpc, timeout=10)
+      
+      try:
+        path_future = stub.DoRouting.future(rrrpc, timeout=10)
 
-      print(outpath := path_future.result().pathFile)
-      with open(outpath) as o:
-        print('writing ref')
-        r = o.read()
+
+        res = path_future.result()
+        print(outpath := res.pathFile)
+
+
+        with open(outpath) as o:
+          print('writing ref')
+          r = o.read()
+          ref.update({
+              'route': r,
+              'state': 'processed'
+          })
+      except grpc.RpcError as rpc_error:
+        status = rpc_status.from_call(rpc_error)
+        print("status failed:", status)
         ref.update({
-            'route': r,
-            'state': 'processed'
-        })
+              'state': 'failed'
+          })
+
       print('request closed')
+         
 
 # Callback function to handle changes
 def on_snapshot(col_snapshot, changes, read_time):

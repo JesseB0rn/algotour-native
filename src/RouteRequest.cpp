@@ -5,6 +5,7 @@
 #include <chrono>
 #include <uuid/uuid.h>
 #include <mutex>
+#include "helpers.h"
 
 using namespace std;
 
@@ -215,7 +216,7 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
         // neighbour.h = 0.0;
         neighbour.f = neighbour.g + neighbour.h;
 
-        if (neighbour.h > 6000)
+        if (Helpers::distanceToLineBoundsCheck(start, current, end) > 1000.00)
         {
           continue;
         }

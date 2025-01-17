@@ -73,7 +73,7 @@ target_link_libraries(hw_grpc_proto
 
 
 # Add the executable
-add_executable(AlgotourNative src/main.cpp src/GeoTiffLoader.cpp src/GeoTiffLoader.h src/Postprocessor.cpp src/Postprocessor.h src/QueueItem.cpp src/QueueItem.h src/RouteRequest.h src/RouteRequest.cpp algotourrouter.grpc.pb.cc algotourrouter.pb.cc)
+add_executable(AlgotourNative src/main.cpp src/GeoTiffLoader.cpp src/GeoTiffLoader.h src/Postprocessor.cpp src/Postprocessor.h src/QueueItem.cpp src/QueueItem.h src/RouteRequest.h src/RouteRequest.cpp algotourrouter.grpc.pb.cc algotourrouter.pb.cc src/helpers.h)
 # Link GDAL library
 target_link_libraries(AlgotourNative ${GDAL_LIBRARIES} hw_grpc_proto
     absl::check
