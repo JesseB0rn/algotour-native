@@ -4,6 +4,7 @@ FROM ubuntu:latest
 # Set the maintainer label
 LABEL maintainer="jesse@born4life.ch"
 
+RUN echo "------ Installing deps ------"
 # Install dependencies
 RUN apt-get update && apt-get install -y \
   git \
@@ -23,41 +24,22 @@ RUN apt-get update && apt-get install -y \
 
 RUN echo "------ Building UUIDgen ------"
 WORKDIR /usr/utillinux
-RUN apt-get update && apt-get install -y wget
-RUN wget https://www.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.tar.gz
-RUN tar -xzf util-linux-2.40.tar.gz
-RUN pwd
+RUN wget https://www.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.tar.gz && \
+  tar -xzf util-linux-2.40.tar.gz
 WORKDIR /usr/utillinux/util-linux-2.40
-RUN ./configure --disable-all-programs --enable-libuuid
-RUN make libuuid
-RUN make install
-
-RUN ls /usr/include/uuid
+RUN ./configure --disable-all-programs --enable-libuuid && make libuuid && make install
 
 RUN echo "------ Building grpc ------"
 
 RUN ldconfig /usr/include/uuid
 
-# Set environment variables for GDAL
-# ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
-# ENV C_INCLUDE_PATH=/usr/include/gdal
-RUN mkdir -p /usr/grpcbuild/
 WORKDIR /usr/grpcbuild/
 ENV GRPC_DIR=/usr/local
 RUN mkdir -p $GRPC_DIR
 ENV PATH="$GRPC_DIR/bin:$PATH"
-RUN git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc
-RUN cd grpc
-RUN mkdir -p cmake/build
+RUN git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc && mkdir -p /usr/grpcbuild/grpc/cmake/build
 WORKDIR /usr/grpcbuild/grpc/cmake/build
-RUN pwd
-RUN ls
-RUN cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=17 -DCMAKE_INSTALL_PREFIX=$GRPC_DIR -DgRPC_ABSL_PROVIDER=module ../..
-RUN make -j 8
-RUN make install
-RUN cd ../..
-
-RUN ldconfig
+RUN cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=17 -DCMAKE_INSTALL_PREFIX=$GRPC_DIR -DgRPC_ABSL_PROVIDER=module ../.. && make -j 8 && make install && ldconfig
 
 RUN echo "------ Building AT native ------"
 COPY src /app/src
@@ -67,3 +49,5 @@ RUN mkdir -p /app/build
 WORKDIR /app/build 
 RUN cmake /app
 RUN cmake --build .
+
+ENTRYPOINT [ "/bin/bash" ]
