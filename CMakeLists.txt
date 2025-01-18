@@ -4,7 +4,7 @@ cmake_minimum_required(VERSION 3.10)
 project(AlgotourNative)
 
 # Specify the C++ standard
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED True)
 
 # Find GDAL package
@@ -12,6 +12,15 @@ find_package(GDAL REQUIRED)
 # Include GDAL headers
 include_directories(${GDAL_INCLUDE_DIRS})
 
+find_package(Threads REQUIRED)
+find_package(absl REQUIRED)
+
+
+#libuuid
+if(NOT APPLE)
+  find_package(PkgConfig REQUIRED)
+  pkg_check_modules(LIBUUID REQUIRED uuid)
+endif()
 
 option(protobuf_MODULE_COMPATIBLE TRUE)
   find_package(Protobuf CONFIG REQUIRED)
@@ -76,12 +85,14 @@ target_link_libraries(hw_grpc_proto
 add_executable(AlgotourNative src/main.cpp src/GeoTiffLoader.cpp src/GeoTiffLoader.h src/Postprocessor.cpp src/Postprocessor.h src/QueueItem.cpp src/QueueItem.h src/RouteRequest.h src/RouteRequest.cpp algotourrouter.grpc.pb.cc algotourrouter.pb.cc src/helpers.h)
 # Link GDAL library
 target_link_libraries(AlgotourNative ${GDAL_LIBRARIES} hw_grpc_proto
+    absl::base
     absl::check
     absl::flags
     absl::flags_parse
     absl::log
     ${_REFLECTION}
     ${_GRPC_GRPCPP}
-    ${_PROTOBUF_LIBPROTOBUF})
+    ${_PROTOBUF_LIBPROTOBUF}
+   ${LIBUUID_LIBRARIES})
 
 
