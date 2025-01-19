@@ -1,53 +1,16 @@
-# Use an official Ubuntu as a parent image
-FROM ubuntu:latest
-
-# Set the maintainer label
-LABEL maintainer="jesse@born4life.ch"
-
-RUN echo "------ Installing deps ------"
-# Install dependencies
-RUN apt-get update && apt-get install -y \
-  git \
-  cmake \
-  build-essential \
-  autoconf \
-  libtool \
-  pkg-config \
-  gdal-bin \
-  libprotobuf-dev \
-  libgdal-dev \
-  libabsl-dev \
-  wget \
-  && apt-get clean \
-  && rm -rf /var/lib/apt/lists/*
-
-
-RUN echo "------ Building UUIDgen ------"
-WORKDIR /usr/utillinux
-RUN wget https://www.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.tar.gz && \
-  tar -xzf util-linux-2.40.tar.gz
-WORKDIR /usr/utillinux/util-linux-2.40
-RUN ./configure --disable-all-programs --enable-libuuid && make libuuid && make install
-
-RUN echo "------ Building grpc ------"
-
-RUN ldconfig /usr/include/uuid
-
-WORKDIR /usr/grpcbuild/
-ENV GRPC_DIR=/usr/local
-RUN mkdir -p $GRPC_DIR
-ENV PATH="$GRPC_DIR/bin:$PATH"
-RUN git clone --recurse-submodules -b v1.66.0 --depth 1 --shallow-submodules https://github.com/grpc/grpc && mkdir -p /usr/grpcbuild/grpc/cmake/build
-WORKDIR /usr/grpcbuild/grpc/cmake/build
-RUN cmake -DgRPC_INSTALL=ON -DgRPC_BUILD_TESTS=OFF -DCMAKE_CXX_STANDARD=17 -DCMAKE_INSTALL_PREFIX=$GRPC_DIR -DgRPC_ABSL_PROVIDER=module ../.. && make -j 8 && make install && ldconfig
+# based on custom base image with deps preinstalled, for the devs sanity
+FROM algotour-native-deps:latest AS builder
 
 RUN echo "------ Building AT native ------"
 COPY src /app/src
 COPY CMakeLists.txt /app/CMakeLists.txt
-WORKDIR /app
-RUN mkdir -p /app/build 
 WORKDIR /app/build 
-RUN cmake /app
-RUN cmake --build .
+RUN cmake /app && cmake --build .
 
-ENTRYPOINT [ "/bin/bash" ]
+RUN cp /app/build/AlgotourNative /app/AlgotourNative
+RUN rm -rf /app/build
+RUN rm -rf /app/src
+
+WORKDIR /app
+
+ENTRYPOINT [ "/app/AlgotourNative", "--riskmap_path", "/riskmaps/rm.tif", "--dem_path", "/dem/dem.tif", "--port",  "50051" ]
