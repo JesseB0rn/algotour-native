@@ -5,18 +5,21 @@
 #include <chrono>
 #include <uuid/uuid.h>
 #include <mutex>
+#include <absl/flags/flag.h>
+#include <absl/strings/str_format.h>
 #include "helpers.h"
 
 using namespace std;
 
 std::mutex mtx;
 
-RouteRequest::RouteRequest(std::tuple<double, double> start, std::tuple<double, double> end, GeoTiffLoader &riskmap, GeoTiffLoader &dem) : start(start), end(end), riskmap(riskmap), dem(dem)
+RouteRequest::RouteRequest(std::tuple<double, double> start, std::tuple<double, double> end, GeoTiffLoader &riskmap, GeoTiffLoader &dem, std::string basepath) : start(start), end(end), riskmap(riskmap), dem(dem), basepath(basepath)
 {
   this->start = start;
   this->end = end;
   this->riskmap = riskmap;
   this->dem = dem;
+  this->basepath = basepath;
 }
 
 float RouteRequest::walk_time_cost(float demValueA, float demValueB, float distance)
@@ -73,6 +76,8 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
   OGRCoordinateTransformation *coordTrans = OGRCreateCoordinateTransformation(&wgs84, &epsg2056);
   coordTrans->Transform(1, &startLat, &startLon);
   coordTrans->Transform(1, &endLat, &endLon);
+
+  coordTrans->DestroyCT(coordTrans);
 
   // float startLat = 2675588.26;
   // float startLon = 1176002.85;
@@ -234,6 +239,12 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
     }
   }
   status = RouteRequestStatus::FAILURE_NO_PATH;
+
+  free(directionX);
+  free(directionY);
+  free(closedList);
+  free(accumulatedCost);
+
   return std::vector<Node>();
 }
 
@@ -261,10 +272,9 @@ RouteRequestStatus RouteRequest::run(std::string &filename, double *progress)
     char uuid_str[37];
     uuid_unparse(uuid, uuid_str);
 
-    const char *basepath = "/Users/jesseb0rn/Documents/repos/algotour-native/out/";
-    filename = basepath + string(uuid_str) + ".geojson";
+    filename = string(uuid_str) + ".geojson";
 
-    Postprocessor::writeReprojectedGeoJSON(smoothed, filename.c_str());
+    Postprocessor::writeReprojectedGeoJSON(smoothed, (basepath + filename).c_str());
   }
 
   auto tend = chrono::high_resolution_clock::now();

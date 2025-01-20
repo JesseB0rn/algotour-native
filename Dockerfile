@@ -24,4 +24,4 @@ COPY --from=builder /app/build/AlgotourNative /app/AlgotourNative
 
 WORKDIR /app
 
-ENTRYPOINT [ "/app/AlgotourNative", "--riskmap_path", "/riskmaps/rm.tif", "--dem_path", "/dem/dem.tif", "--port",  "50051" ]
+ENTRYPOINT [ "/app/AlgotourNative", "--riskmap_path", "/riskmaps/rm.tif", "--dem_path", "/dem/dem.tif", "--port",  "50051", "--basepath", "/routes/" ]

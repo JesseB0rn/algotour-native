@@ -54,7 +54,11 @@ void Postprocessor::writeReprojectedGeoJSON(const std::vector<std::tuple<double,
     return;
   }
 
+  OGRGeometryFactory::destroyGeometry(line);
+  CSLDestroy(papszOptions);
+  delete oSRS;
   OGRFeature::DestroyFeature(poFeature);
+
   GDALClose(hDstDS);
 }
 

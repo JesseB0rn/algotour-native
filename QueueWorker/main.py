@@ -32,7 +32,7 @@ def process_new_document(doc_data: dict, ref):
 
 
         res = path_future.result()
-        print(outpath := res.pathFile)
+        print(outpath := "/Users/jesseb0rn/Documents/repos/algotour-native/out/" + res.pathFile)
 
 
         with open(outpath) as o:

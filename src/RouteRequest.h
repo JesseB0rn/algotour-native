@@ -17,7 +17,7 @@ enum RouteRequestStatus
 class RouteRequest
 {
 public:
-  RouteRequest(std::tuple<double, double> start, std::tuple<double, double> end, GeoTiffLoader &riskmap, GeoTiffLoader &dem);
+  RouteRequest(std::tuple<double, double> start, std::tuple<double, double> end, GeoTiffLoader &riskmap, GeoTiffLoader &dem, std::string basepath);
   RouteRequestStatus run(std::string &filename, double *progress = nullptr);
 
 private:
@@ -26,6 +26,7 @@ private:
   GeoTiffLoader &riskmap;
   GeoTiffLoader &dem;
   char *filename;
+  std::string basepath;
 
   std::vector<Node> runWalkOnRasters(RouteRequestStatus &status, double *progress = nullptr);
   float walk_time_cost(float demValueA, float demValueB, float distance);

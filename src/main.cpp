@@ -20,6 +20,7 @@
 ABSL_FLAG(std::string, riskmap_path, "", "Path to the riskmap GeoTIFF file");
 ABSL_FLAG(std::string, dem_path, "", "Path to the DEM GeoTIFF file");
 ABSL_FLAG(uint16_t, port, 50051, "Port to listen on");
+ABSL_FLAG(std::string, basepath, "~/routes", "Basepath to store routes");
 
 using namespace std;
 using grpc::CallbackServerContext;
@@ -59,7 +60,7 @@ public:
     ServerUnaryReactor *reactor = context->DefaultReactor();
     cout << "---- Received request ----" << endl;
 
-    auto rq = new RouteRequest({request->startlat(), request->startlon()}, {request->endlat(), request->endlon()}, *riskmap_loader, *dem_loader);
+    auto rq = new RouteRequest({request->startlat(), request->startlon()}, {request->endlat(), request->endlon()}, *riskmap_loader, *dem_loader, absl::GetFlag(FLAGS_basepath));
     std::string pth;
     RouteRequestStatus _status = (rq->run(pth));
 
