@@ -13,7 +13,7 @@ using namespace std;
 
 std::mutex mtx;
 
-RouteRequest::RouteRequest(std::tuple<double, double> start, std::tuple<double, double> end, GeoTiffLoader &riskmap, GeoTiffLoader &dem, std::string basepath) : start(start), end(end), riskmap(riskmap), dem(dem), basepath(basepath)
+RouteRequest::RouteRequest(std::tuple<double, double> start, std::tuple<double, double> end, GeoTiffLoader *riskmap, GeoTiffLoader *dem, std::string basepath) : start(start), end(end), riskmap(riskmap), dem(dem), basepath(basepath)
 {
   this->start = start;
   this->end = end;
@@ -84,13 +84,13 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
   // float endLat = 2674609.10;
   // float endLon = 1172793.45;
 
-  int nXSize = riskmap.GetNXSize();
-  int nYSize = riskmap.GetNYSize();
+  int nXSize = riskmap->GetNXSize();
+  int nYSize = riskmap->GetNYSize();
 
   Node end(0, 0);
   Node start(0, 0);
-  riskmap.convertLatLonToPixel(startLat, startLon, start.x, start.y);
-  riskmap.convertLatLonToPixel(endLat, endLon, end.x, end.y);
+  riskmap->convertLatLonToPixel(startLat, startLon, start.x, start.y);
+  riskmap->convertLatLonToPixel(endLat, endLon, end.x, end.y);
 
   if (start.x <= 0 || start.x > nXSize || start.y <= 0 || start.y > nYSize)
   {
@@ -105,13 +105,13 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
     return std::vector<Node>();
   }
 
-  if (*riskmap.GetVRefFromDatasetBuffer(startLat, startLon) == NODATA_VALUE || *dem.GetVRefFromDatasetBuffer(startLat, startLon) == NODATA_VALUE)
+  if (*riskmap->GetVRefFromDatasetBuffer(startLat, startLon) == NODATA_VALUE || *dem->GetVRefFromDatasetBuffer(startLat, startLon) == NODATA_VALUE)
   {
     cout << "Start is NODATA_VALUE" << endl;
     status = RouteRequestStatus::FAILURE_OUT_OF_BOUNDS;
     return std::vector<Node>();
   }
-  if (riskmap.GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE || dem.GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE)
+  if (riskmap->GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE || dem->GetValueFromDatasetBuffer(endLat, endLon) == NODATA_VALUE)
   {
     cout << "End is NODATA_VALUE" << endl;
     status = RouteRequestStatus::FAILURE_OUT_OF_BOUNDS;
@@ -128,7 +128,7 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
 
   float totalDistance = sqrt((start.x - end.x) * (start.x - end.x) + (start.y - end.y) * (start.y - end.y));
 
-  float *demValueEnd = dem.GetVRefFromDatasetBuffer(end.x, end.y);
+  float *demValueEnd = dem->GetVRefFromDatasetBuffer(end.x, end.y);
 
   priority_queue<Node, std::vector<Node>, greater<Node>> openList;
   openList.push(start);
@@ -165,11 +165,15 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
         current.y -= j;
       }
       status = RouteRequestStatus::SUCCESS;
+      CPLFree(directionX);
+      CPLFree(directionY);
+      CPLFree(closedList);
+      CPLFree(accumulatedCost);
       return path;
     }
 
-    float *riskmapValue = riskmap.GetVRefFromDatasetBuffer(current.x, current.y);
-    float *demValue = dem.GetVRefFromDatasetBuffer(current.x, current.y);
+    float *riskmapValue = riskmap->GetVRefFromDatasetBuffer(current.x, current.y);
+    float *demValue = dem->GetVRefFromDatasetBuffer(current.x, current.y);
 
     closedList[current.x * nYSize + current.y] = true;
     for (int i = -1; i <= 1; i++)
@@ -194,8 +198,8 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
           continue;
         }
 
-        float *riskmapValueNeighbour = riskmap.GetVRefFromDatasetBuffer(x, y);
-        float *demValueNeighbour = dem.GetVRefFromDatasetBuffer(x, y);
+        float *riskmapValueNeighbour = riskmap->GetVRefFromDatasetBuffer(x, y);
+        float *demValueNeighbour = dem->GetVRefFromDatasetBuffer(x, y);
 
         if (*riskmapValueNeighbour == NODATA_VALUE || *demValueNeighbour == NODATA_VALUE)
         {
@@ -240,10 +244,10 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
   }
   status = RouteRequestStatus::FAILURE_NO_PATH;
 
-  free(directionX);
-  free(directionY);
-  free(closedList);
-  free(accumulatedCost);
+  CPLFree(directionX);
+  CPLFree(directionY);
+  CPLFree(closedList);
+  CPLFree(accumulatedCost);
 
   return std::vector<Node>();
 }
@@ -265,7 +269,7 @@ RouteRequestStatus RouteRequest::run(std::string &filename, double *progress)
     std::lock_guard<std::mutex> lock(mtx);
 
     Postprocessor::simplify(path);
-    auto smoothed = Postprocessor::smooth(path, &riskmap);
+    auto smoothed = Postprocessor::smooth(path, riskmap);
 
     uuid_t uuid;
     uuid_generate(uuid);

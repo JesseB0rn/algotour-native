@@ -50,17 +50,15 @@ void printUsage()
 class ATRouterService final : public Algorouter::CallbackService
 {
 public:
-  ATRouterService(GeoTiffLoader &riskmap_loader, GeoTiffLoader &dem_loader) : riskmap_loader(&riskmap_loader), dem_loader(&dem_loader)
+  ATRouterService(GeoTiffLoader *riskmap_loader, GeoTiffLoader *dem_loader) : riskmap_loader(riskmap_loader), dem_loader(dem_loader)
   {
-    this->riskmap_loader = &riskmap_loader;
-    this->dem_loader = &dem_loader;
   }
   ServerUnaryReactor *DoRouting(CallbackServerContext *context, const RouteRequestRPC *request, RouteResponse *reply) override
   {
     ServerUnaryReactor *reactor = context->DefaultReactor();
     cout << "---- Received request ----" << endl;
 
-    auto rq = new RouteRequest({request->startlat(), request->startlon()}, {request->endlat(), request->endlon()}, *riskmap_loader, *dem_loader, absl::GetFlag(FLAGS_basepath));
+    auto rq = new RouteRequest({request->startlat(), request->startlon()}, {request->endlat(), request->endlon()}, riskmap_loader, dem_loader, absl::GetFlag(FLAGS_basepath));
     std::string pth;
     RouteRequestStatus _status = (rq->run(pth));
 
@@ -85,6 +83,8 @@ public:
       }
       reply->set_pathfile("");
       reactor->Finish(grpc_status);
+
+      delete rq;
       return reactor;
     }
 
@@ -92,13 +92,14 @@ public:
 
     reactor->Finish(Status::OK);
     cout << "---- Done ----" << endl;
+    delete rq;
     return reactor;
   };
   GeoTiffLoader *riskmap_loader;
   GeoTiffLoader *dem_loader;
 };
 
-void RunServer(uint16_t port, GeoTiffLoader &riskmap_loader, GeoTiffLoader &dem_loader)
+void RunServer(uint16_t port, GeoTiffLoader *riskmap_loader, GeoTiffLoader *dem_loader)
 {
   cout << "Starting server on port " << port << endl;
   std::string server_address = absl::StrFormat("0.0.0.0:%d", port);
@@ -152,7 +153,7 @@ int main(int argc, char *argv[])
   // t1.join();
   // t2.join();
 
-  RunServer(absl::GetFlag(FLAGS_port), *riskmap_loader, *dem_loader);
+  RunServer(absl::GetFlag(FLAGS_port), riskmap_loader, dem_loader);
 
   riskmap_loader->~GeoTiffLoader();
   dem_loader->~GeoTiffLoader();
