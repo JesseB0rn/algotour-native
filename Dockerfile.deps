@@ -1,5 +1,5 @@
 # Use an official Ubuntu as a parent image
-FROM ubuntu:latest
+FROM debian:latest
 
 # Set the maintainer label
 LABEL maintainer="jesse@born4life.ch"
@@ -18,21 +18,22 @@ RUN apt-get update && apt-get install -y \
   libprotobuf-dev \
   libgdal-dev \
   libabsl-dev \
+  uuid-dev \
   wget \
   && apt-get clean \
   && rm -rf /var/lib/apt/lists/*
+# 
 
+# RUN echo "------ Building UUIDgen ------"
+# WORKDIR /usr/utillinux
+# RUN wget https://www.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.tar.gz && \
+#   tar -xzf util-linux-2.40.tar.gz
+# WORKDIR /usr/utillinux/util-linux-2.40
+# RUN ./configure --disable-all-programs --enable-libuuid && make libuuid && make install
 
-RUN echo "------ Building UUIDgen ------"
-WORKDIR /usr/utillinux
-RUN wget https://www.kernel.org/pub/linux/utils/util-linux/v2.40/util-linux-2.40.tar.gz && \
-  tar -xzf util-linux-2.40.tar.gz
-WORKDIR /usr/utillinux/util-linux-2.40
-RUN ./configure --disable-all-programs --enable-libuuid && make libuuid && make install
+# RUN echo "------ Building grpc ------"
 
-RUN echo "------ Building grpc ------"
-
-RUN ldconfig /usr/include/uuid
+# RUN ldconfig /usr/include/uuid
 
 WORKDIR /usr/grpcbuild/
 ENV GRPC_DIR=/usr/local
