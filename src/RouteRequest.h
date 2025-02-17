@@ -27,9 +27,11 @@ private:
   GeoTiffLoader *dem;
   char *filename;
   std::string basepath;
+  int touched_xmin, touched_xmax, touched_ymin, touched_ymax;
 
   std::vector<Node> runWalkOnRasters(RouteRequestStatus &status, double *progress = nullptr);
   float walk_time_cost(float demValueA, float demValueB, float distance);
+  void writeSimmilarRaster(float *buffer, std::string path);
 };
 
 #endif // ROUTEREQ_H

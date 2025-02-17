@@ -26,11 +26,11 @@ float RouteRequest::walk_time_cost(float demValueA, float demValueB, float dista
 {
 
   const float hrPerHm = 1.0 / 400.0;
-  const float hrPerHmSteep = 1.0 / 100.0;
+  const float hrPerHmSteep = 150.0; // 1.0 / 100.0;
   const float hrPerSIDist = 1.0 / 4000.0;
   const float cellSize = 10.0;
 
-  const float steepThreshold = tan(45.0 / 180.0 * M_PI);
+  const float steepThreshold = tan(40.0 / 180.0 * M_PI);
 
   float elevation_diff = demValueB - demValueA;
   float gradient = elevation_diff / distance;
@@ -50,7 +50,7 @@ float RouteRequest::walk_time_cost(float demValueA, float demValueB, float dista
    */
 
   return distance * hrPerSIDist +
-         abs(elevation_diff) * (abs(gradient) >= steepThreshold ? hrPerHmSteep : hrPerHm);
+         abs(elevation_diff) * (abs(gradient) >= steepThreshold ? hrPerHmSteep : hrPerHm) * distance;
 }
 
 std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, double *progress)
@@ -66,6 +66,11 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
   double startLat, startLon, endLat, endLon;
   std::tie(startLat, startLon) = start;
   std::tie(endLat, endLon) = end;
+
+  touched_xmax = 0;
+  touched_xmin = riskmap->GetNXSize();
+  touched_ymax = 0;
+  touched_ymin = riskmap->GetNYSize();
 
   OGRSpatialReference wgs84;
   OGRSpatialReference epsg2056;
@@ -159,12 +164,13 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
       {
         // cout << "Path item: " << current.x << ", " << current.y << endl;
         path.push_back(current);
-        int i = directionX[current.x * nYSize + current.y];
-        int j = directionY[current.x * nYSize + current.y];
+        int i = directionX[current.y * nXSize + current.x];
+        int j = directionY[current.y * nXSize + current.x];
         current.x -= i;
         current.y -= j;
       }
       status = RouteRequestStatus::SUCCESS;
+      writeSimmilarRaster(accumulatedCost, basepath + "accumulatedCost.tif");
       CPLFree(directionX);
       CPLFree(directionY);
       CPLFree(closedList);
@@ -193,7 +199,7 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
           continue;
         }
 
-        if (closedList[x * nYSize + y])
+        if (closedList[y * nXSize + x])
         {
           continue;
         }
@@ -206,8 +212,13 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
           continue;
         }
 
+        touched_xmax = max(touched_xmax, x);
+        touched_xmin = min(touched_xmin, x);
+        touched_ymax = max(touched_ymax, y);
+        touched_ymin = min(touched_ymin, y);
+
         float distance = sqrt(i * i + j * j) * 10.0;
-        float cost = walk_time_cost(*demValue, *demValueNeighbour, distance);
+        float cost = walk_time_cost(*demValue, *demValueNeighbour, distance) + 1;
 
         // cout << "Cost: " << cost << endl;
 
@@ -230,14 +241,14 @@ std::vector<Node> RouteRequest::runWalkOnRasters(RouteRequestStatus &status, dou
           continue;
         }
 
-        if (neighbour.g >= accumulatedCost[x * nYSize + y])
+        if (neighbour.g >= accumulatedCost[y * nXSize + x])
         {
           continue;
         }
 
-        directionX[x * nYSize + y] = i;
-        directionY[x * nYSize + y] = j;
-        accumulatedCost[x * nYSize + y] = neighbour.g;
+        directionX[y * nXSize + x] = i;
+        directionY[y * nXSize + x] = j;
+        accumulatedCost[y * nXSize + x] = neighbour.g;
         openList.push(neighbour);
       }
     }
@@ -285,4 +296,66 @@ RouteRequestStatus RouteRequest::run(std::string &filename, double *progress)
   cout << "Found Path, simplify and store in " << chrono::duration_cast<chrono::milliseconds>(tend - tstart).count() << " ms" << endl;
 
   return RouteRequestStatus::SUCCESS;
+}
+
+void RouteRequest::writeSimmilarRaster(float *buffer, std::string path)
+{
+
+  int nXSizenew = touched_xmax - touched_xmin;
+  int nYSizenew = touched_ymax - touched_ymin;
+
+  cout << "Writing to " << path << endl;
+
+  const char *pszFormat = "GTiff";
+  GDALDriver *poDriver = GetGDALDriverManager()->GetDriverByName(pszFormat);
+  if (poDriver == nullptr)
+  {
+    std::cerr << "GTiff driver not available." << std::endl;
+    return;
+  }
+
+  // set inf and nan to nodata
+  for (int i = 0; i < nYSizenew; i++)
+  {
+    for (int j = 0; j < nXSizenew; j++)
+    {
+
+      if (buffer[(i + touched_ymin) * riskmap->GetNXSize() + touched_xmin + j] == INFINITY || isnan(buffer[(i + touched_ymin) * riskmap->GetNXSize() + touched_xmin + j]))
+      {
+        buffer[(i + touched_ymin) * riskmap->GetNXSize() + touched_xmin + j] = NODATA_VALUE;
+      }
+    }
+  }
+
+  char **papszOptions = nullptr;
+  // papszOptions = CSLSetNameValue(papszOptions, "PAM", "YES");
+  GDALDataset *poDstDS = poDriver->Create(path.c_str(), nXSizenew, nYSizenew, 1, GDT_Float32, papszOptions);
+  // CSLDestroy(papszOptions);
+  if (poDstDS == nullptr)
+  {
+    std::cerr << "Creation of output file failed." << std::endl;
+    return;
+  }
+
+  GDALRasterBand *poBand = poDstDS->GetRasterBand(1);
+
+  for (int i = 0; i < nYSizenew; i++)
+  {
+    poBand->RasterIO(GF_Write, 0, i, nXSizenew, 1, buffer + (i + touched_ymin) * riskmap->GetNXSize() + touched_xmin, nXSizenew, 1, GDT_Float32, 0, 0);
+  }
+
+  // set the projection and transform
+  double adfGeoTransform[6];
+  double N_adfGeoTransform[6];
+  riskmap->dataset->GetGeoTransform(adfGeoTransform);
+  riskmap->dataset->GetGeoTransform(N_adfGeoTransform);
+  N_adfGeoTransform[0] = adfGeoTransform[0] + touched_xmin * adfGeoTransform[1];
+  N_adfGeoTransform[3] = adfGeoTransform[3] + touched_ymin * adfGeoTransform[5];
+
+  poDstDS->SetGeoTransform(N_adfGeoTransform);
+  poDstDS->SetProjection(riskmap->dataset->GetProjectionRef());
+
+  poBand->SetNoDataValue(NODATA_VALUE);
+
+  GDALClose((GDALDatasetH)poDstDS);
 }

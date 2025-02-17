@@ -5,3 +5,7 @@ out.json
 QueueWorker/env
 QueueWorker/firebase.json
 QueueWorker/__pycache__/
+out/accCost.jpg
+out/accCost.jpg.aux.xml
+out/accCost.wld
+out/accumulatedCost.tif

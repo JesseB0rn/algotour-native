@@ -23,8 +23,8 @@ public:
     int GetNXSize() { return nXSize; }
     int GetNYSize() { return nYSize; }
 
-private:
     GDALDataset *dataset;
+private:
     float *buffer;
     double fwdTransform[6];
     int nXSize;
